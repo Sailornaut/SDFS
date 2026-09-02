@@ -3,16 +3,18 @@
   "private": true,
   "packageManager": "pnpm@11.19.0",
   "scripts": {
-    "dev": "pnpm --parallel --filter @sdfs/api --filter @sdfs/dashboard dev",
+    "dev": "dotenv -e .env -- pnpm --parallel --filter @sdfs/api --filter @sdfs/dashboard dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "db:generate": "pnpm --filter @sdfs/db generate",
-    "db:migrate": "pnpm --filter @sdfs/db migrate",
-    "db:studio": "pnpm --filter @sdfs/db studio"
+    "db:migrate": "dotenv -e .env -- pnpm --filter @sdfs/db migrate",
+    "db:studio": "dotenv -e .env -- pnpm --filter @sdfs/db studio",
+    "bootstrap": "dotenv -e .env -- pnpm --filter @sdfs/api bootstrap"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
+    "dotenv-cli": "^10.0.0",
     "typescript": "^5.9.2"
   }
 }

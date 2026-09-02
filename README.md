@@ -18,11 +18,11 @@ docker compose up -d
 pnpm install
 pnpm db:generate
 pnpm db:migrate
-pnpm --filter @sdfs/api bootstrap "Your organization"
+pnpm bootstrap -- "Your organization"
 pnpm dev
 ```
 
-The bootstrap command prints the only copy of an owner API credential. Store it securely, then use it to sign into the dashboard at `http://localhost:4200`. The API listens on `http://localhost:4100`; interactive documentation is at `/docs` and health is at `/health`.
+Run these commands from the repository root. Root scripts explicitly load the root `.env` before invoking package commands. The bootstrap command prints the only copy of an owner API credential. Store it securely, then use it to sign into the dashboard at `http://localhost:4200`. The API listens on `http://localhost:4100`; interactive documentation is at `/docs` and health is at `/health`.
 
 ## Authentication
 
