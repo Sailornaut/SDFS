@@ -1,0 +1,18 @@
+{
+  "name": "securedfs",
+  "private": true,
+  "packageManager": "pnpm@10.11.0",
+  "scripts": {
+    "dev": "pnpm --filter @sdfs/api dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @sdfs/db generate",
+    "db:migrate": "pnpm --filter @sdfs/db migrate",
+    "db:studio": "pnpm --filter @sdfs/db studio"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2"
+  }
+}

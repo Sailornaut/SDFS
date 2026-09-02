@@ -1,0 +1,119 @@
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "postgresql"; url = env("DATABASE_URL") }
+
+enum PolicyEffect { ALLOW DENY REQUIRE_APPROVAL }
+enum RequestStatus { ALLOWED DENIED PENDING APPROVED REJECTED EXPIRED }
+enum Availability { ACTIVE COMING_SOON PAUSED }
+
+model Principal {
+  id String @id @default(cuid())
+  name String
+  externalRef String? @unique
+  agents Agent[]
+  policies Policy[]
+  requests ApprovalRequest[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Agent {
+  id String @id @default(cuid())
+  principalId String
+  principal Principal @relation(fields: [principalId], references: [id], onDelete: Cascade)
+  name String
+  description String?
+  requests ApprovalRequest[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([principalId, name])
+}
+
+model Policy {
+  id String @id @default(cuid())
+  principalId String
+  principal Principal @relation(fields: [principalId], references: [id], onDelete: Cascade)
+  name String
+  capabilityPattern String
+  effect PolicyEffect
+  maxAmountCents Int?
+  priority Int @default(100)
+  enabled Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([principalId, priority])
+}
+
+model ApprovalRequest {
+  id String @id @default(cuid())
+  principalId String
+  principal Principal @relation(fields: [principalId], references: [id], onDelete: Cascade)
+  agentId String
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  capability String
+  reason String
+  amountCents Int?
+  resource Json
+  status RequestStatus
+  matchedPolicyId String?
+  decidedBy String?
+  decisionNote String?
+  decidedAt DateTime?
+  expiresAt DateTime
+  grants CapabilityGrant[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([principalId, status])
+}
+
+model CapabilityGrant {
+  id String @id @default(cuid())
+  approvalRequestId String
+  approvalRequest ApprovalRequest @relation(fields: [approvalRequestId], references: [id], onDelete: Cascade)
+  tokenId String @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model Provider {
+  id String @id @default(cuid())
+  name String
+  slug String @unique
+  baseUrl String
+  description String?
+  capabilities Capability[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Capability {
+  id String @id @default(cuid())
+  providerId String
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  name String
+  version String @default("1.0")
+  description String?
+  inputSchema Json
+  outputSchema Json
+  authMethods String[]
+  availability Availability @default(ACTIVE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([providerId, name, version])
+  @@index([name, availability])
+}
+
+model AuditEvent {
+  id String @id @default(cuid())
+  principalId String?
+  agentId String?
+  actorType String
+  actorId String
+  action String
+  targetType String
+  targetId String?
+  metadata Json
+  occurredAt DateTime @default(now())
+  @@index([principalId, occurredAt])
+  @@index([targetType, targetId])
+}
