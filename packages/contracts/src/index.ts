@@ -20,7 +20,7 @@ export const createCredentialSchema = z.object({
   scopes: z.array(z.enum([
     "agents:read", "agents:write", "policies:read", "policies:write",
     "approvals:read", "approvals:request", "approvals:decide",
-    "grants:issue", "providers:read", "providers:write", "audit:read",
+    "grants:issue", "grants:introspect", "providers:read", "providers:write", "audit:read",
     "credentials:manage"
   ])).min(1),
   expiresAt: z.iso.datetime().optional()
@@ -55,6 +55,8 @@ export const createGrantSchema = z.object({
   approvalRequestId: z.string().cuid(),
   ttlSeconds: z.number().int().min(30).max(3600).default(900)
 });
+
+export const introspectGrantSchema = z.object({ token: z.string().min(40) });
 
 export const createProviderSchema = z.object({
   name: z.string().min(1).max(120),

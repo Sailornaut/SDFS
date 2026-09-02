@@ -62,6 +62,39 @@ Refresh the dashboard to decide the resulting `deploy.production` request. The s
 6. If pending, decide in the dashboard or with `POST /v1/approval-requests/:id/decision`.
 7. Exchange an approved request at `POST /v1/capability-grants`.
 
+Each approval can be exchanged exactly once. Redemption atomically changes the request to `GRANTED`, so retries or competing agent processes cannot mint duplicate grants. Grants can be checked with `POST /v1/capability-grants/introspect` and revoked with `POST /v1/capability-grants/:id/revoke`.
+
+## Agent SDK
+
+Create an agent-pinned runtime credential in the dashboard's **Agent access** panel. Its secret is displayed once, so copy it into the agent's secret store before leaving the page.
+
+```ts
+import { SDFS } from "@securedfs/sdk";
+
+const sdfs = new SDFS({
+  baseUrl: "http://localhost:4100",
+  apiKey: process.env.SDFS_API_KEY!,
+  principalId: process.env.SDFS_PRINCIPAL_ID!,
+  agentId: process.env.SDFS_AGENT_ID!
+});
+
+const approval = await sdfs.request({
+  capability: "deploy.production",
+  reason: "Release SDFS dashboard v0.2.0",
+  resource: { environment: "production" }
+});
+
+await approval.waitForDecision({ timeoutMs: 15 * 60_000 });
+if (!approval.approved) throw new Error(`Deployment ${approval.approval.status}`);
+
+const { token } = await approval.redeem(900);
+// Present the short-lived token to the capability provider.
+```
+
+The SDK polls only while a request is pending, supports abort signals and timeouts, and refuses a second redemption locally. The API independently enforces single-use redemption.
+
+After pulling a schema change, run `pnpm db:migrate` before restarting the API.
+
 ## Security boundary
 
 The MVP issues signed authorization grants. It deliberately does not store or return upstream secrets yet. Provider-specific token exchange and proxied execution belong in the next milestone, after authentication, key rotation, revocation, and tenant isolation are hardened.

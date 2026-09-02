@@ -18,6 +18,7 @@ enum RequestStatus {
   DENIED
   PENDING
   APPROVED
+  GRANTED
   REJECTED
   EXPIRED
 }
@@ -115,7 +116,7 @@ model ApprovalRequest {
 
 model CapabilityGrant {
   id                String          @id @default(cuid())
-  approvalRequestId String
+  approvalRequestId String @unique
   approvalRequest   ApprovalRequest @relation(fields: [approvalRequestId], references: [id], onDelete: Cascade)
   tokenId           String          @unique
   expiresAt         DateTime

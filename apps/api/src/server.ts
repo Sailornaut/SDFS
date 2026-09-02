@@ -2,12 +2,12 @@ import "dotenv/config";
 import Fastify from "fastify";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
-import { SignJWT } from "jose";
+import { jwtVerify, SignJWT } from "jose";
 import { randomUUID } from "node:crypto";
 import { db, Prisma, RequestStatus } from "@sdfs/db";
 import {
   createAgentSchema, createApprovalRequestSchema, createCapabilitySchema,
-  createCredentialSchema, createGrantSchema, createPolicySchema,
+  createCredentialSchema, createGrantSchema, introspectGrantSchema, createPolicySchema,
   createProviderSchema, decisionSchema
 } from "@sdfs/contracts";
 import { evaluatePolicies } from "./policy.js";
@@ -107,6 +107,7 @@ app.post("/v1/capability-grants", { preHandler: requireScope("grants:issue") }, 
   const approval = await db.approvalRequest.findUniqueOrThrow({ where: { id: body.approvalRequestId } });
   if (approval.principalId !== request.auth.principalId) return reply.code(404).send({ error: "not_found" });
   if (request.auth.agentId && request.auth.agentId !== approval.agentId) return reply.code(403).send({ error: "agent_identity_mismatch" });
+  if (approval.status === "GRANTED") return reply.code(409).send({ error: "approval_already_redeemed" });
   if (!["ALLOWED", "APPROVED"].includes(approval.status)) return reply.code(403).send({ error: "request_not_authorized", status: approval.status });
   if (approval.expiresAt < new Date()) return reply.code(410).send({ error: "request_expired" });
   const tokenId = randomUUID();
@@ -117,9 +118,45 @@ app.post("/v1/capability-grants", { preHandler: requireScope("grants:issue") }, 
     .setProtectedHeader({ alg: "HS256", typ: "JWT" }).setIssuer(process.env.SDFS_ISSUER ?? "securedfs")
     .setSubject(approval.agentId).setAudience("sdfs-capability").setJti(tokenId)
     .setIssuedAt().setExpirationTime(Math.floor(expiresAt.getTime() / 1000)).sign(new TextEncoder().encode(secret));
-  const grant = await db.capabilityGrant.create({ data: { approvalRequestId: approval.id, tokenId, expiresAt } });
+  const grant = await db.$transaction(async (tx) => {
+    const claimed = await tx.approvalRequest.updateMany({
+      where: { id: approval.id, status: { in: ["ALLOWED", "APPROVED"] } },
+      data: { status: "GRANTED" }
+    });
+    if (claimed.count !== 1) throw new Error("APPROVAL_ALREADY_REDEEMED");
+    return tx.capabilityGrant.create({ data: { approvalRequestId: approval.id, tokenId, expiresAt } });
+  }).catch((error: unknown) => {
+    if (error instanceof Error && (error.message === "APPROVAL_ALREADY_REDEEMED" || error.message.includes("Unique constraint"))) return null;
+    throw error;
+  });
+  if (!grant) return reply.code(409).send({ error: "approval_already_redeemed" });
   await audit("capability.granted", "capability_grant", grant.id, "system", "access", { capability: approval.capability, tokenId }, approval.principalId, approval.agentId);
   return reply.code(201).send({ grant, token });
+});
+
+app.post("/v1/capability-grants/introspect", { preHandler: requireScope("grants:introspect") }, async (request) => {
+  const { token } = parse(introspectGrantSchema, request.body);
+  try {
+    const secret = process.env.SDFS_SIGNING_SECRET;
+    if (!secret || secret.length < 32) throw new Error("signing_secret_unavailable");
+    const verified = await jwtVerify(token, new TextEncoder().encode(secret), {
+      issuer: process.env.SDFS_ISSUER ?? "securedfs", audience: "sdfs-capability"
+    });
+    const tokenId = verified.payload.jti;
+    if (!tokenId) return { active: false };
+    const grant = await db.capabilityGrant.findUnique({ where: { tokenId }, include: { approvalRequest: true } });
+    if (!grant || grant.approvalRequest.principalId !== request.auth.principalId || grant.revokedAt || grant.expiresAt <= new Date()) return { active: false };
+    return { active: true, grantId: grant.id, agentId: grant.approvalRequest.agentId, capability: grant.approvalRequest.capability, resource: grant.approvalRequest.resource, expiresAt: grant.expiresAt };
+  } catch { return { active: false }; }
+});
+
+app.post("/v1/capability-grants/:id/revoke", { preHandler: requireScope("grants:issue") }, async (request, reply) => {
+  const { id } = request.params as { id: string };
+  const grant = await db.capabilityGrant.findUniqueOrThrow({ where: { id }, include: { approvalRequest: true } });
+  if (grant.approvalRequest.principalId !== request.auth.principalId) return reply.code(404).send({ error: "not_found" });
+  const revoked = await db.capabilityGrant.update({ where: { id }, data: { revokedAt: grant.revokedAt ?? new Date() } });
+  await audit("capability.revoked", "capability_grant", id, "credential", request.auth.credentialId, {}, request.auth.principalId, grant.approvalRequest.agentId);
+  return { id: revoked.id, revokedAt: revoked.revokedAt };
 });
 
 app.post("/v1/providers", { preHandler: requireScope("providers:write") }, async (request, reply) => {

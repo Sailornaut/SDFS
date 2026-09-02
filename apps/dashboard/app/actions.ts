@@ -11,3 +11,25 @@ export async function decide(formData: FormData) {
 }
 
 export async function logout() { await clearSession(); redirect("/login"); }
+
+export type CredentialState = { apiKey?: string; error?: string };
+
+export async function createAgentCredential(_previous: CredentialState, formData: FormData): Promise<CredentialState> {
+  try {
+    const result = await sdfs<{ apiKey: string }>("/v1/credentials", {
+      method: "POST",
+      body: JSON.stringify({
+        name: String(formData.get("name") || "Agent runtime credential"),
+        agentId: String(formData.get("agentId")),
+        scopes: ["approvals:request", "approvals:read", "grants:issue"]
+      })
+    });
+    revalidatePath("/");
+    return { apiKey: result.apiKey };
+  } catch (error) { return { error: error instanceof Error ? error.message : "Credential creation failed" }; }
+}
+
+export async function revokeCredential(formData: FormData) {
+  await sdfs(`/v1/credentials/${String(formData.get("id"))}/revoke`, { method: "POST" });
+  revalidatePath("/");
+}

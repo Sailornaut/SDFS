@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./credentials.css";
 
 export const metadata: Metadata = { title: "SecureDFS Control Plane", description: "Agent approvals and policy control" };
 
