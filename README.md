@@ -18,20 +18,35 @@ docker compose up -d
 pnpm install
 pnpm db:generate
 pnpm db:migrate
+pnpm --filter @sdfs/api bootstrap "Your organization"
 pnpm dev
 ```
 
-The API listens on `http://localhost:4100`; interactive documentation is at `/docs` and health is at `/health`.
+The bootstrap command prints the only copy of an owner API credential. Store it securely, then use it to sign into the dashboard at `http://localhost:4200`. The API listens on `http://localhost:4100`; interactive documentation is at `/docs` and health is at `/health`.
+
+## Authentication
+
+All `/v1` routes require `Authorization: Bearer <credential>`. Credentials are random, stored only as SHA-256 hashes, and may be principal-wide or pinned to one agent. Each credential has explicit scopes and optional expiration; revocation takes effect on its next request.
+
+The dashboard encrypts its credential with AES-256-GCM in a strict, HTTP-only, eight-hour cookie. Set a unique `DASHBOARD_SESSION_SECRET`; never reuse `SDFS_SIGNING_SECRET`.
+
+Create and revoke additional credentials through:
+
+- `GET /v1/credentials`
+- `POST /v1/credentials`
+- `POST /v1/credentials/:id/revoke`
+
+New secrets are returned once. SDFS cannot recover them afterward.
 
 ## First end-to-end flow
 
-1. Create a principal with `POST /v1/principals`.
+1. Bootstrap the principal and owner credential from the trusted server console.
 2. Register its agent with `POST /v1/agents`.
-3. Add a policy with `POST /v1/policies`.
-4. Request authority with `POST /v1/approval-requests`.
-5. If pending, decide with `POST /v1/approval-requests/:id/decision`.
-6. Exchange an approved request at `POST /v1/capability-grants`.
-7. Find providers via `GET /v1/discovery?capability=...`.
+3. Create an agent-pinned credential with only `approvals:request` and `grants:issue`.
+4. Add a policy with `POST /v1/policies`.
+5. Request authority with `POST /v1/approval-requests`.
+6. If pending, decide in the dashboard or with `POST /v1/approval-requests/:id/decision`.
+7. Exchange an approved request at `POST /v1/capability-grants`.
 
 ## Security boundary
 

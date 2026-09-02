@@ -14,6 +14,18 @@ export const createAgentSchema = z.object({
   description: z.string().max(1000).optional()
 });
 
+export const createCredentialSchema = z.object({
+  name: z.string().min(1).max(120),
+  agentId: z.string().cuid().optional(),
+  scopes: z.array(z.enum([
+    "agents:read", "agents:write", "policies:read", "policies:write",
+    "approvals:read", "approvals:request", "approvals:decide",
+    "grants:issue", "providers:read", "providers:write", "audit:read",
+    "credentials:manage"
+  ])).min(1),
+  expiresAt: z.iso.datetime().optional()
+});
+
 export const createPolicySchema = z.object({
   principalId: z.string().cuid(),
   name: z.string().min(1).max(120),
