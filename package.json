@@ -10,7 +10,8 @@
     "db:generate": "pnpm --filter @sdfs/db generate",
     "db:migrate": "dotenv -e .env -- pnpm --filter @sdfs/db migrate",
     "db:studio": "dotenv -e .env -- pnpm --filter @sdfs/db studio",
-    "bootstrap": "dotenv -e .env -- pnpm --filter @sdfs/api bootstrap"
+    "bootstrap": "dotenv -e .env -- pnpm --filter @sdfs/api bootstrap",
+    "demo:seed": "dotenv -e .env -- pnpm --filter @sdfs/api demo:seed"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

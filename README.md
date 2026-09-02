@@ -38,6 +38,20 @@ Create and revoke additional credentials through:
 
 New secrets are returned once. SDFS cannot recover them afterward.
 
+## Demo approval
+
+With the API and dashboard running, load an owner credential without writing it into shell history:
+
+```bash
+read -s "SDFS_API_KEY?Owner API key: "
+export SDFS_API_KEY
+echo
+pnpm demo:seed
+unset SDFS_API_KEY
+```
+
+Refresh the dashboard to decide the resulting `deploy.production` request. The seeder intentionally uses the authenticated API rather than inserting database rows, so agent creation, policy evaluation, tenant checks, and audit events are all exercised.
+
 ## First end-to-end flow
 
 1. Bootstrap the principal and owner credential from the trusted server console.

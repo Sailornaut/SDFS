@@ -8,7 +8,8 @@
     "start": "node dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --import tsx --test src/**/*.test.ts",
-    "bootstrap": "tsx src/bootstrap.ts"
+    "bootstrap": "tsx src/bootstrap.ts",
+    "demo:seed": "tsx src/demo-seed.ts"
   },
   "dependencies": {
     "@fastify/swagger": "^9.5.1",
