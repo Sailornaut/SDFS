@@ -117,6 +117,8 @@ In a second terminal:
 pnpm demo:agent
 ```
 
+The root demo command builds the local SDK package automatically before starting the agent, so it also works from a fresh clone.
+
 The agent creates a `deploy.production` request and waits. Open `http://localhost:4200`, approve it once, and watch the agent redeem the approval and call the provider on port 4300.
 
 The provider does not receive an SDFS signing secret. It authenticates to SDFS with a principal-owned credential limited to `grants:introspect` and `grants:consume`. Consumption is atomic and keyed by the provider credential plus the request's `Idempotency-Key`: an identical retry returns the same deployment identifier, while another operation cannot reuse the grant.

@@ -14,7 +14,7 @@
     "bootstrap": "dotenv -e .env -- pnpm --filter @sdfs/api bootstrap",
     "demo:seed": "dotenv -e .env -- pnpm --filter @sdfs/api demo:seed",
     "demo:setup": "dotenv -e .env -- pnpm --filter @sdfs/api demo:setup",
-    "demo:agent": "dotenv -e .env -- pnpm --filter @sdfs/api demo:agent"
+    "demo:agent": "pnpm --filter @securedfs/sdk build && dotenv -e .env -- pnpm --filter @sdfs/api demo:agent"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
