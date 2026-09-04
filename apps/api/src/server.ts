@@ -12,6 +12,7 @@ import {
 } from "@sdfs/contracts";
 import { evaluatePolicies } from "./policy.js";
 import { generateApiKey, requireScope } from "./auth.js";
+import { publishApproval, subscribeToApproval } from "./approval-events.js";
 
 const app = Fastify({ logger: true });
 await app.register(swagger, { openapi: { info: { title: "SecureDFS API", version: "0.0.1" } } });
@@ -80,6 +81,7 @@ app.post("/v1/approval-requests", { preHandler: requireScope("approvals:request"
     expiresAt: new Date(Date.now() + expiresInSeconds * 1000)
   } });
   await audit("approval.requested", "approval_request", approval.id, "agent", body.agentId, { status: approval.status, capability: body.capability }, body.principalId, body.agentId);
+  publishApproval(approval);
   return reply.code(201).send(approval);
 });
 
@@ -99,6 +101,39 @@ app.get("/v1/approval-requests/:id", { preHandler: requireScope("approvals:read"
   return approval;
 });
 
+app.get("/v1/approval-requests/:id/events", { preHandler: requireScope("approvals:read") }, async (request, reply) => {
+  const { id } = request.params as { id: string };
+  const approval = await db.approvalRequest.findUniqueOrThrow({ where: { id } });
+  if (approval.principalId !== request.auth.principalId) return reply.code(404).send({ error: "not_found" });
+  if (request.auth.agentId && request.auth.agentId !== approval.agentId) return reply.code(403).send({ error: "agent_identity_mismatch" });
+  reply.hijack();
+  reply.raw.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache, no-transform",
+    connection: "keep-alive",
+    "x-accel-buffering": "no"
+  });
+  const send = (value: object) => reply.raw.write(`event: approval\ndata: ${JSON.stringify(value)}\n\n`);
+  let closed = false;
+  let heartbeat: NodeJS.Timeout | undefined;
+  let unsubscribe: () => void = () => undefined;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    if (heartbeat) clearInterval(heartbeat);
+    unsubscribe();
+    if (!reply.raw.writableEnded) reply.raw.end();
+  };
+  unsubscribe = subscribeToApproval(id, updated => {
+    send(updated);
+    if (updated.status !== "PENDING") close();
+  });
+  request.raw.on("close", close);
+  send(approval);
+  if (approval.status !== "PENDING") return close();
+  heartbeat = setInterval(() => reply.raw.write(": heartbeat\n\n"), 15_000);
+});
+
 app.post("/v1/approval-requests/:id/decision", { preHandler: requireScope("approvals:decide") }, async (request, reply) => {
   const { id } = request.params as { id: string };
   const body = parse(decisionSchema, request.body);
@@ -111,6 +146,7 @@ app.post("/v1/approval-requests/:id/decision", { preHandler: requireScope("appro
     decisionNote: body.note, decidedAt: new Date()
   } });
   await audit("approval.decided", "approval_request", id, "human", body.decidedBy, { approved: body.approved }, current.principalId, current.agentId);
+  publishApproval(updated);
   return updated;
 });
 
@@ -142,6 +178,7 @@ app.post("/v1/capability-grants", { preHandler: requireScope("grants:issue") }, 
     throw error;
   });
   if (!grant) return reply.code(409).send({ error: "approval_already_redeemed" });
+  publishApproval({ ...approval, status: "GRANTED" });
   await audit("capability.granted", "capability_grant", grant.id, "system", "access", { capability: approval.capability, tokenId }, approval.principalId, approval.agentId);
   return reply.code(201).send({ grant, token });
 });

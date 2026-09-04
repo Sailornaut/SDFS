@@ -36,6 +36,26 @@ export class ApprovalHandle {
   async waitForDecision(options: { timeoutMs?: number; signal?: AbortSignal } = {}) {
     const timeoutMs = options.timeoutMs ?? 15 * 60_000;
     const deadline = Date.now() + timeoutMs;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort("timeout"), timeoutMs);
+    const abort = () => controller.abort(options.signal?.reason ?? "aborted");
+    options.signal?.addEventListener("abort", abort, { once: true });
+    try {
+      if (this.approval.status === "PENDING") {
+        try {
+          this.approval = await this.client.waitForApprovalEvent(this.approval.id, controller.signal);
+        } catch (error) {
+          if (controller.signal.aborted) {
+            if (options.signal?.aborted) throw new DOMException("Approval wait aborted", "AbortError");
+            throw new SDFSError(408, "approval_timeout");
+          }
+          if (error instanceof SDFSError && [401, 403].includes(error.status)) throw error;
+        }
+      }
+    } finally {
+      clearTimeout(timeout);
+      options.signal?.removeEventListener("abort", abort);
+    }
     while (this.approval.status === "PENDING") {
       if (options.signal?.aborted) throw new DOMException("Polling aborted", "AbortError");
       if (Date.now() >= deadline) throw new SDFSError(408, "approval_timeout");
@@ -87,6 +107,34 @@ export class SDFS {
   }
 
   getApproval(id: string) { return this.call<ApprovalRequest>(`/v1/approval-requests/${id}`); }
+
+  async waitForApprovalEvent(id: string, signal?: AbortSignal): Promise<ApprovalRequest> {
+    const response = await fetch(`${this.baseUrl}/v1/approval-requests/${id}/events`, {
+      headers: { authorization: `Bearer ${this.options.apiKey}`, accept: "text/event-stream" }, signal
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      throw new SDFSError(response.status, body.error ?? "approval_stream_failed");
+    }
+    if (!response.body) throw new SDFSError(502, "approval_stream_unavailable");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done });
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop() ?? "";
+      for (const frame of frames) {
+        const data = frame.split("\n").filter(line => line.startsWith("data:")).map(line => line.slice(5).trimStart()).join("\n");
+        if (!data) continue;
+        const approval = JSON.parse(data) as ApprovalRequest;
+        if (approval.status !== "PENDING") return approval;
+      }
+      if (done) break;
+    }
+    throw new SDFSError(502, "approval_stream_ended");
+  }
 
   redeem(approvalRequestId: string, ttlSeconds: number) {
     return this.call<CapabilityGrant>("/v1/capability-grants", { method: "POST", body: JSON.stringify({ approvalRequestId, ttlSeconds }) });

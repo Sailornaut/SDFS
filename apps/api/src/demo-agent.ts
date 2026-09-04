@@ -16,7 +16,7 @@ const approval = await sdfs.request({
   resource: { environment: "production", service: "sdfs-dashboard", version: "0.2.0" },
   expiresInSeconds: 3600
 });
-console.log(`SDFS: ${approval.approval.status}. Open http://localhost:4200 to decide request ${approval.approval.id}`);
+console.log(`SDFS: ${approval.approval.status}. Waiting on the secure decision stream; open http://localhost:4200 to decide request ${approval.approval.id}`);
 await approval.waitForDecision({ timeoutMs: 60 * 60_000 });
 if (!approval.approved) throw new Error(`Agent: deployment ${approval.approval.status.toLowerCase()}.`);
 console.log("Agent: approved. Redeeming one short-lived capability grant…");

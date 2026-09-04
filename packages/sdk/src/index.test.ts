@@ -26,3 +26,24 @@ test("simulated agent waits for a human and redeems exactly once", async () => {
     assert.equal(calls.filter(call => call.includes("capability-grants")).length, 1);
   } finally { globalThis.fetch = originalFetch; }
 });
+
+test("receives an approval through the authenticated event stream without polling", async () => {
+  const calls: string[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const url = String(input); calls.push(url);
+    if (url.endsWith("/v1/approval-requests") && init?.method === "POST") return Response.json(approval, { status: 201 });
+    if (url.endsWith("/events")) {
+      const approved = { ...approval, status: "APPROVED" };
+      return new Response(`event: approval\ndata: ${JSON.stringify(approval)}\n\nevent: approval\ndata: ${JSON.stringify(approved)}\n\n`, { headers: { "content-type": "text/event-stream" } });
+    }
+    return Response.json({ error: "unexpected_request" }, { status: 500 });
+  };
+  try {
+    const client = new SDFS({ apiKey: "sdfs_agent.secret", principalId: "principal_1", agentId: "agent_1", pollIntervalMs: 1 });
+    const handle = await client.request({ capability: "deploy.production", reason: "ship" });
+    await handle.waitForDecision({ timeoutMs: 100 });
+    assert.equal(handle.approval.status, "APPROVED");
+    assert.equal(calls.some(call => call.endsWith("/v1/approval-requests/approval_1")), false);
+  } finally { globalThis.fetch = originalFetch; }
+});

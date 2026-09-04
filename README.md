@@ -93,7 +93,9 @@ const { token } = await approval.redeem(900);
 // Present the short-lived token to the capability provider.
 ```
 
-The SDK polls only while a request is pending, supports abort signals and timeouts, and refuses a second redemption locally. The API independently enforces single-use redemption.
+The SDK waits on an authenticated Server-Sent Events stream while a request is pending, supports abort signals and timeouts, and falls back to polling when streaming is unavailable. It refuses a second redemption locally, while the API independently enforces single-use redemption.
+
+Raw clients can subscribe with `GET /v1/approval-requests/:id/events` using the same bearer credential as the request. The stream immediately sends the current snapshot, emits subsequent state changes as `approval` events, sends heartbeats while pending, and closes after a terminal decision.
 
 After pulling a schema change, run `pnpm db:migrate` before restarting the API.
 
