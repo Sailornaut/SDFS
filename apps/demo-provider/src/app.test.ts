@@ -20,6 +20,17 @@ test("executes once and returns a stable result for an idempotent replay", async
   await app.close();
 });
 
+test("accepts the bodyless POST shape used by the demo agent", async () => {
+  const app = createProviderApp(client());
+  const response = await app.inject({
+    method: "POST", url: "/v1/deployments",
+    headers: { authorization: "Bearer signed.grant", "idempotency-key": "release-agent-001" }
+  });
+  assert.equal(response.statusCode, 201);
+  assert.equal(response.json().status, "SUCCEEDED");
+  await app.close();
+});
+
 test("rejects inactive and incorrectly scoped grants before consumption", async () => {
   let consumed = false;
   const inactive = createProviderApp(client({ introspect: async () => ({ active: false }), consume: async () => { consumed = true; return valid; } }));

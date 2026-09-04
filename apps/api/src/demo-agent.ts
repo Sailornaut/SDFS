@@ -24,7 +24,7 @@ const { token } = await approval.redeem(300);
 const idempotencyKey = randomUUID();
 const response = await fetch(`${providerUrl}/v1/deployments`, {
   method: "POST",
-  headers: { authorization: `Bearer ${token}`, "idempotency-key": idempotencyKey, "content-type": "application/json" }
+  headers: { authorization: `Bearer ${token}`, "idempotency-key": idempotencyKey }
 });
 const result = await response.json();
 if (!response.ok) throw new Error(`Provider returned ${response.status}: ${JSON.stringify(result)}`);
