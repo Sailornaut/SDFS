@@ -4,11 +4,14 @@ import { redirect } from "next/navigation";
 import { sdfs } from "../lib/api";
 import { clearSession } from "../lib/session";
 
-export async function decide(formData: FormData) {
+async function decide(formData: FormData, approved: boolean) {
   const id = String(formData.get("id"));
-  await sdfs(`/v1/approval-requests/${id}/decision`, { method: "POST", body: JSON.stringify({ approved: formData.get("decision") === "approve", decidedBy: "SecureDFS dashboard" }) });
+  await sdfs(`/v1/approval-requests/${id}/decision`, { method: "POST", body: JSON.stringify({ approved, decidedBy: "SecureDFS dashboard" }) });
   revalidatePath("/");
 }
+
+export async function approve(formData: FormData) { await decide(formData, true); }
+export async function deny(formData: FormData) { await decide(formData, false); }
 
 export async function logout() { await clearSession(); redirect("/login"); }
 

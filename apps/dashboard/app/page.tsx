@@ -1,5 +1,5 @@
 import { sdfs } from "../lib/api";
-import { decide, logout } from "./actions";
+import { approve, deny, logout } from "./actions";
 import { CredentialManager } from "./credential-manager";
 
 type Approval = { id: string; capability: string; reason: string; status: string; amountCents: number | null; createdAt: string; expiresAt: string; agent: { name: string } };
@@ -35,7 +35,7 @@ export default async function Dashboard() {
           <div className="request-top"><span className="agent">{item.agent.name}</span><span>{time(item.createdAt)}</span></div>
           <h3>{item.capability}</h3><p>{item.reason}</p>
           <div className="request-meta"><span>Expires {time(item.expiresAt)}</span>{item.amountCents != null && <span>Limit ${(item.amountCents / 100).toFixed(2)}</span>}</div>
-          <form action={decide} className="decision"><input type="hidden" name="id" value={item.id}/><button name="decision" value="deny" className="deny">Deny</button><button name="decision" value="approve">Approve once</button></form>
+          <form action={deny} className="decision"><input type="hidden" name="id" value={item.id}/><button className="deny">Deny</button><button formAction={approve}>Approve once</button></form>
         </article>)}
       </div>
       <aside>
