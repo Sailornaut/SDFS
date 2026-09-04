@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { db, Prisma, RequestStatus } from "@sdfs/db";
 import {
   createAgentSchema, createApprovalRequestSchema, createCapabilitySchema,
-  createCredentialSchema, createGrantSchema, introspectGrantSchema, createPolicySchema,
+  consumeGrantSchema, createCredentialSchema, createGrantSchema, introspectGrantSchema, createPolicySchema,
   createProviderSchema, decisionSchema
 } from "@sdfs/contracts";
 import { evaluatePolicies } from "./policy.js";
@@ -20,6 +20,18 @@ await app.register(swaggerUi, { routePrefix: "/docs" });
 function parse<T>(schema: { parse(value: unknown): T }, value: unknown): T { return schema.parse(value); }
 async function audit(action: string, targetType: string, targetId: string | null, actorType: string, actorId: string, metadata: object = {}, principalId?: string, agentId?: string) {
   await db.auditEvent.create({ data: { action, targetType, targetId, actorType, actorId, metadata, principalId, agentId } });
+}
+
+async function resolveGrant(token: string, principalId: string) {
+  const secret = process.env.SDFS_SIGNING_SECRET;
+  if (!secret || secret.length < 32) throw new Error("SDFS_SIGNING_SECRET must contain at least 32 characters");
+  const verified = await jwtVerify(token, new TextEncoder().encode(secret), {
+    issuer: process.env.SDFS_ISSUER ?? "securedfs", audience: "sdfs-capability"
+  });
+  if (!verified.payload.jti) return null;
+  const grant = await db.capabilityGrant.findUnique({ where: { tokenId: verified.payload.jti }, include: { approvalRequest: true } });
+  if (!grant || grant.approvalRequest.principalId !== principalId || grant.revokedAt || grant.expiresAt <= new Date()) return null;
+  return grant;
 }
 
 app.get("/health", async () => ({ status: "ok", service: "securedfs-api" }));
@@ -137,17 +149,39 @@ app.post("/v1/capability-grants", { preHandler: requireScope("grants:issue") }, 
 app.post("/v1/capability-grants/introspect", { preHandler: requireScope("grants:introspect") }, async (request) => {
   const { token } = parse(introspectGrantSchema, request.body);
   try {
-    const secret = process.env.SDFS_SIGNING_SECRET;
-    if (!secret || secret.length < 32) throw new Error("signing_secret_unavailable");
-    const verified = await jwtVerify(token, new TextEncoder().encode(secret), {
-      issuer: process.env.SDFS_ISSUER ?? "securedfs", audience: "sdfs-capability"
-    });
-    const tokenId = verified.payload.jti;
-    if (!tokenId) return { active: false };
-    const grant = await db.capabilityGrant.findUnique({ where: { tokenId }, include: { approvalRequest: true } });
-    if (!grant || grant.approvalRequest.principalId !== request.auth.principalId || grant.revokedAt || grant.expiresAt <= new Date()) return { active: false };
-    return { active: true, grantId: grant.id, agentId: grant.approvalRequest.agentId, capability: grant.approvalRequest.capability, resource: grant.approvalRequest.resource, expiresAt: grant.expiresAt };
+    const grant = await resolveGrant(token, request.auth.principalId);
+    if (!grant) return { active: false };
+    return { active: true, consumable: !grant.consumedAt, grantId: grant.id, agentId: grant.approvalRequest.agentId, capability: grant.approvalRequest.capability, resource: grant.approvalRequest.resource, expiresAt: grant.expiresAt, consumedAt: grant.consumedAt };
   } catch { return { active: false }; }
+});
+
+app.post("/v1/capability-grants/consume", { preHandler: requireScope("grants:consume") }, async (request, reply) => {
+  const { token, idempotencyKey } = parse(consumeGrantSchema, request.body);
+  let grant;
+  try { grant = await resolveGrant(token, request.auth.principalId); }
+  catch { return reply.code(401).send({ error: "invalid_capability_grant" }); }
+  if (!grant) return reply.code(401).send({ error: "inactive_capability_grant" });
+  const consumer = request.auth.credentialId;
+  if (grant.consumedAt) {
+    if (grant.consumedBy === consumer && grant.idempotencyKey === idempotencyKey) {
+      return { active: true, replayed: true, grantId: grant.id, agentId: grant.approvalRequest.agentId, capability: grant.approvalRequest.capability, resource: grant.approvalRequest.resource, consumedAt: grant.consumedAt };
+    }
+    return reply.code(409).send({ error: "capability_grant_already_consumed" });
+  }
+  const consumedAt = new Date();
+  const claimed = await db.capabilityGrant.updateMany({
+    where: { id: grant.id, consumedAt: null },
+    data: { consumedAt, consumedBy: consumer, idempotencyKey }
+  });
+  if (claimed.count !== 1) {
+    const raced = await db.capabilityGrant.findUnique({ where: { id: grant.id } });
+    if (raced?.consumedBy === consumer && raced.idempotencyKey === idempotencyKey) {
+      return { active: true, replayed: true, grantId: grant.id, agentId: grant.approvalRequest.agentId, capability: grant.approvalRequest.capability, resource: grant.approvalRequest.resource, consumedAt: raced.consumedAt };
+    }
+    return reply.code(409).send({ error: "capability_grant_already_consumed" });
+  }
+  await audit("capability.consumed", "capability_grant", grant.id, "credential", consumer, { capability: grant.approvalRequest.capability, idempotencyKey }, grant.approvalRequest.principalId, grant.approvalRequest.agentId);
+  return { active: true, replayed: false, grantId: grant.id, agentId: grant.approvalRequest.agentId, capability: grant.approvalRequest.capability, resource: grant.approvalRequest.resource, consumedAt };
 });
 
 app.post("/v1/capability-grants/:id/revoke", { preHandler: requireScope("grants:issue") }, async (request, reply) => {

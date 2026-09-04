@@ -5,7 +5,7 @@ import { db } from "@sdfs/db";
 export type Scope =
   | "agents:read" | "agents:write" | "policies:read" | "policies:write"
   | "approvals:read" | "approvals:request" | "approvals:decide"
-  | "grants:issue" | "grants:introspect" | "providers:read" | "providers:write" | "audit:read"
+  | "grants:issue" | "grants:introspect" | "grants:consume" | "providers:read" | "providers:write" | "audit:read"
   | "credentials:manage";
 
 export type AuthContext = { credentialId: string; principalId: string; agentId: string | null; scopes: string[] };

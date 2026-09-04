@@ -4,6 +4,7 @@
   "packageManager": "pnpm@11.19.0",
   "scripts": {
     "dev": "dotenv -e .env -- pnpm --parallel --filter @sdfs/api --filter @sdfs/dashboard dev",
+    "dev:demo": "dotenv -e .env -- pnpm --parallel --filter @sdfs/api --filter @sdfs/dashboard --filter @sdfs/demo-provider dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
@@ -11,7 +12,9 @@
     "db:migrate": "dotenv -e .env -- pnpm --filter @sdfs/db migrate",
     "db:studio": "dotenv -e .env -- pnpm --filter @sdfs/db studio",
     "bootstrap": "dotenv -e .env -- pnpm --filter @sdfs/api bootstrap",
-    "demo:seed": "dotenv -e .env -- pnpm --filter @sdfs/api demo:seed"
+    "demo:seed": "dotenv -e .env -- pnpm --filter @sdfs/api demo:seed",
+    "demo:setup": "dotenv -e .env -- pnpm --filter @sdfs/api demo:setup",
+    "demo:agent": "dotenv -e .env -- pnpm --filter @sdfs/api demo:agent"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

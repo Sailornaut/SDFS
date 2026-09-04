@@ -121,6 +121,9 @@ model CapabilityGrant {
   tokenId           String          @unique
   expiresAt         DateTime
   revokedAt         DateTime?
+  consumedAt        DateTime?
+  consumedBy        String?
+  idempotencyKey    String?
   createdAt         DateTime        @default(now())
 }
 

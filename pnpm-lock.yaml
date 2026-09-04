@@ -32,6 +32,9 @@ importers:
       '@sdfs/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@securedfs/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
       dotenv:
         specifier: ^17.2.2
         version: 17.4.2
@@ -73,6 +76,22 @@ importers:
       '@types/react-dom':
         specifier: ^19.1.9
         version: 19.2.5(@types/react@19.2.18)
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+
+  apps/demo-provider:
+    dependencies:
+      dotenv:
+        specifier: ^17.2.2
+        version: 17.4.2
+      fastify:
+        specifier: ^5.5.0
+        version: 5.12.1
+    devDependencies:
+      tsx:
+        specifier: ^4.20.5
+        version: 4.23.13
       typescript:
         specifier: ^5.9.2
         version: 5.9.3

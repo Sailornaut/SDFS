@@ -10,6 +10,8 @@ SecureDFS is an agent control plane: discover capabilities, determine whether an
 - **SDFS Discover** — machine-readable provider capability registry
 - **SDFS Audit** — append-only action and authorization history
 
+The repository also contains a reference deployment provider. It demonstrates how an external service inspects an SDFS grant, validates the exact capability and resource, atomically consumes it, and safely handles retries.
+
 ## Quick start
 
 ```bash
@@ -95,6 +97,37 @@ The SDK polls only while a request is pending, supports abort signals and timeou
 
 After pulling a schema change, run `pnpm db:migrate` before restarting the API.
 
+## Complete provider handshake demo
+
+First prepare a least-privilege agent identity and provider identity. This command writes the records to the local database and prints both credentials exactly once:
+
+```bash
+pnpm demo:setup
+```
+
+Copy the four generated values (`SDFS_DEMO_*` plus `SDFS_PROVIDER_API_KEY`) into `.env`, then start SDFS, the dashboard, and the reference provider:
+
+```bash
+pnpm dev:demo
+```
+
+In a second terminal:
+
+```bash
+pnpm demo:agent
+```
+
+The agent creates a `deploy.production` request and waits. Open `http://localhost:4200`, approve it once, and watch the agent redeem the approval and call the provider on port 4300.
+
+The provider does not receive an SDFS signing secret. It authenticates to SDFS with a principal-owned credential limited to `grants:introspect` and `grants:consume`. Consumption is atomic and keyed by the provider credential plus the request's `Idempotency-Key`: an identical retry returns the same deployment identifier, while another operation cannot reuse the grant.
+
+Provider endpoints:
+
+- `GET http://localhost:4300/health`
+- `POST http://localhost:4300/v1/deployments`
+- `POST /v1/capability-grants/introspect` on SDFS
+- `POST /v1/capability-grants/consume` on SDFS
+
 ## Security boundary
 
-The MVP issues signed authorization grants. It deliberately does not store or return upstream secrets yet. Provider-specific token exchange and proxied execution belong in the next milestone, after authentication, key rotation, revocation, and tenant isolation are hardened.
+The MVP issues signed authorization grants and supports provider-side inspection and one-time consumption. It deliberately does not store or return upstream secrets, perform real deployments, or yet establish trust between providers and principals in different tenants. Provider federation, asymmetric signing/key rotation, and proxied upstream credentials remain later milestones.

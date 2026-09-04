@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const effectSchema = z.enum(["ALLOW", "DENY", "REQUIRE_APPROVAL"]);
-export const requestStatusSchema = z.enum(["ALLOWED", "DENIED", "PENDING", "APPROVED", "REJECTED", "EXPIRED"]);
+export const requestStatusSchema = z.enum(["ALLOWED", "DENIED", "PENDING", "APPROVED", "GRANTED", "REJECTED", "EXPIRED"]);
 
 export const createPrincipalSchema = z.object({
   name: z.string().min(1).max(120),
@@ -20,7 +20,7 @@ export const createCredentialSchema = z.object({
   scopes: z.array(z.enum([
     "agents:read", "agents:write", "policies:read", "policies:write",
     "approvals:read", "approvals:request", "approvals:decide",
-    "grants:issue", "grants:introspect", "providers:read", "providers:write", "audit:read",
+    "grants:issue", "grants:introspect", "grants:consume", "providers:read", "providers:write", "audit:read",
     "credentials:manage"
   ])).min(1),
   expiresAt: z.iso.datetime().optional()
@@ -57,6 +57,9 @@ export const createGrantSchema = z.object({
 });
 
 export const introspectGrantSchema = z.object({ token: z.string().min(40) });
+export const consumeGrantSchema = introspectGrantSchema.extend({
+  idempotencyKey: z.string().min(8).max(200)
+});
 
 export const createProviderSchema = z.object({
   name: z.string().min(1).max(120),
